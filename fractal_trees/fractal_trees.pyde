@@ -9,13 +9,18 @@ add_library('svg')
 cell_size = 150 # grid cell size, px
 n_cells = 6 # number of cols and rows 
 angle_step = 90 / n_cells
+branch_color = 20
+left_color = '#ca3617'
+center_color = '#009431'
+right_color = '#edaf14'
 
+has_leaves = True
 
 def setup():
     size(n_cells * cell_size + cell_size,
-         n_cells * cell_size + cell_size, SVG, 'fractal.svg')
+         n_cells * cell_size + cell_size, SVG, 'fractal_trees_color.svg')
     background(255)
-    stroke(0)
+    stroke(branch_color)
 
 
 def draw():
@@ -68,3 +73,39 @@ def branch(h, left_angle, right_angle):
             line(0, 0, 0, -h)
             translate(0, -h)
             branch(h, left_angle, right_angle)
+    elif has_leaves:
+        draw_leaf(h, left_angle, right_angle)
+
+
+def draw_leaf(h, left_angle, right_angle):
+    strokeWeight(0.3)
+    stroke(50)
+    
+    # leaf's color depends on where the tree is in the grid:
+    # on the main diagonal - center_color
+    # in the top right corner - right_color
+    # in the bottom left corner - left_color
+    # anywhere in between - the color is interpolated between 
+    #                       the main diagonal and one of the corners
+    
+    # calculate distance to the grid's main diagonal 
+    row = left_angle / angle_step
+    col = right_angle / angle_step
+    
+    v1 = PVector(row, col)
+    v2 = PVector(col, row)
+    v3 = (v1 - v2) / 2
+    
+    delta = v3.mag() / PVector(n_cells, n_cells).mag() * 5 
+    
+    if left_angle > right_angle:
+        c = lerpColor(center_color, left_color, delta)
+    elif left_angle < right_angle:
+        c = lerpColor(center_color, right_color, delta)
+    else:
+        c = center_color
+    fill(c);
+    circle(0, -h/2, 2.5*h)
+    
+    strokeWeight(1)
+    stroke(branch_color)
