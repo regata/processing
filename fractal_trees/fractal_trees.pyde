@@ -1,5 +1,5 @@
 """
-Draw a grid fractal trees
+Draw a grid of fractal trees
 
 Based on 'Recursive Tree' example by Daniel Shiffman.
 """
