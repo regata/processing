@@ -6,10 +6,11 @@ https://medium.com/@jason.webb/space-colonization-algorithm-in-javascript-6f683b
 """
 add_library('svg')
 
-n_leaves = 1000
+n_leaves = 300
 
-max_dist = 300
-min_dist = 5
+max_dist = 100
+min_dist = 4
+branch_len = 2
 
 class Leaf:
     def __init__(self, pos):
@@ -18,7 +19,6 @@ class Leaf:
         
     def draw(self):
         if not self.reached:
-            strokeWeight(1.5)
             point(self.pos.x, self.pos.y)
 
 class Branch:
@@ -28,30 +28,38 @@ class Branch:
         self.dir = dir.copy().normalize() # direction
         self.attractors = [] # leafs that the branch is attracted to
         
-    def grow(self, rate=5):
+    def grow(self):
         if len(self.attractors) == 0:
             return None
 
         new_dir = self.dir.copy()
         for a in self.attractors:
             attr_dir = PVector.sub(a.pos, self.pos)
-            attr_dir.normalize()
+            # not normalizing 'attr_dir' helps bias the tree towards
+            # areas of more leaves 
+            # attr_dir.normalize()
             new_dir.add(attr_dir)
-        
+        # new_dir.add(PVector(random(-0.01, 0.01), random(-0.01, 0.01)))
         new_dir.normalize()
-        new_dir.mult(rate)
-            
+        new_dir.mult(branch_len)
+
         self.attractors = []
         
         new_pos = PVector.add(self.pos, new_dir)
         new_branch = Branch(self, new_pos, new_dir)
+        
+        # sometimes a branch gets stuck between 2 equidistant leaves.
+        # Break the tie by adding noise
+        dp = new_branch.dir.dot(self.dir)
+        if abs(1-dp) < 0.002:
+            random_offset = PVector(random(-0.2, 0.2), random(-0.2, 0.2))
+            new_branch.pos.add(random_offset)
         return new_branch
     
     def add_attractor(self, leaf):
         self.attractors.append(leaf)
     
     def draw(self):
-        strokeWeight(1)
         if self.parent is not None:
             line(self.pos.x, self.pos.y, self.parent.pos.x, self.parent.pos.y)
 
@@ -59,12 +67,13 @@ class Branch:
 class Tree:
     def __init__(self, root, leaves):
         self.leaves = leaves
-        self.branches = [root]
+        self.active_branches = [root] # branches that are still growing
+        self.passive_branches = [] # branches that stopped growing
         
         # inital growth
         reached = False
         while not reached:
-            branch = self.branches[-1]
+            branch = self.active_branches[-1]
             for l in self.leaves:
                 d = PVector.dist(l.pos, branch.pos)
                 if d < min_dist:
@@ -72,50 +81,64 @@ class Tree:
                     break
 
             if not reached:
+                # add a temp attractor to let the branch grow 
                 branch.add_attractor(Leaf(PVector.add(branch.pos, branch.dir)))
                 new_branch = branch.grow()
-                self.branches.append(new_branch)
+                self.active_branches.append(new_branch)
 
     
     def grow(self):
         # for each leaf find the closest branch within max_dist
         for l in self.leaves:
-            if l.reached:
-                continue
             curr_dist = None
             closest_branch = None
-            for b in self.branches:
+            for b in self.active_branches:
                 d = PVector.dist(l.pos, b.pos)
                 if d < min_dist:
                     l.reached = True
                 
                 if curr_dist is None or curr_dist > d:
                     curr_dist = d
-                    closes_branch = b
+                    closest_branch = b
             
-            if closes_branch is not None and d < max_dist:
-                closes_branch.add_attractor(l)
+            if closest_branch is not None and curr_dist < max_dist:
+                closest_branch.add_attractor(l)
         
-        for b in self.branches:
+        # grow active branches
+        new_active_branches = []
+        for b in self.active_branches:
             new_branch = b.grow()
             if new_branch is not None:
-                self.branches.append(new_branch)
+                new_active_branches.append(b)
+                new_active_branches.append(new_branch)
+            else:
+                self.passive_branches.append(b)
+        self.active_branches = new_active_branches
         
+        # remove reached leaves
         remain_leaves = []
         for l in self.leaves:
             if not l.reached:
                 remain_leaves.append(l)
         self.leaves = remain_leaves
-        print('n_leaves = %d  n_branches = %d' % (len(self.leaves), len(self.branches)))
+        print('n_leaves = %d  n_active = %d  n_passive = %d' 
+              % (len(self.leaves), len(self.active_branches), len(self.passive_branches)))
         
 
     def draw(self, leaves=False, branches=True):
         if leaves:
             for l in self.leaves:
+                strokeWeight(2)
+                stroke(0)
                 l.draw()
         
         if branches:
-            for b in self.branches:
+            strokeWeight(1)
+            for b in self.passive_branches:
+                stroke(0)
+                b.draw()
+            for b in self.active_branches:
+                stroke(255, 0, 0)
                 b.draw()
 
 
@@ -126,7 +149,7 @@ def setup():
     size(500, 500)
     background(255)
     
-    randomSeed(42)
+    randomSeed(43)
     
     leaves = []
     for _ in range(n_leaves):
@@ -141,7 +164,15 @@ def setup():
     # noLoop()
     
 def draw():
+    if len(tree.active_branches) == 0:
+        noLoop()
+        print('finished')
+
     background(255)
     tree.grow()
-    tree.draw(leaves=True, branches=True)    
-    # print('finished')
+    tree.draw(leaves=True, branches=True)
+    
+def keyPressed():
+    if key == 'p':
+        print('stopping the loop')
+        noLoop()
