@@ -24,6 +24,7 @@ class Leaf:
 class Branch:
     def __init__(self, parent, pos, dir):
         self.parent = parent
+        self.n_children = 0
         self.pos = pos # position
         self.dir = dir.copy().normalize() # direction
         self.attractors = [] # leafs that the branch is attracted to
@@ -61,6 +62,9 @@ class Branch:
     
     def draw(self):
         if self.parent is not None:
+            weight = map(log(1 + self.n_children), 0, 4, 0.4, 2.5)
+            # weight = 1 + log(1 + self.n_children)
+            strokeWeight(weight)
             line(self.pos.x, self.pos.y, self.parent.pos.x, self.parent.pos.y)
 
 
@@ -123,7 +127,21 @@ class Tree:
         self.leaves = remain_leaves
         print('n_leaves = %d  n_active = %d  n_passive = %d' 
               % (len(self.leaves), len(self.active_branches), len(self.passive_branches)))
+
+
+    def update_passive_counts(self):
+        children_map = {}
         
+        for b in self.passive_branches:
+            parent = b.parent
+            while parent is not None:
+                parent.n_children += 1
+                if parent.parent is None:
+                    root = parent
+
+                parent = parent.parent
+        assert len(self.passive_branches) == root.n_children + 1
+
 
     def draw(self, leaves=False, branches=True):
         if leaves:
@@ -166,6 +184,7 @@ def setup():
 def draw():
     if len(tree.active_branches) == 0:
         noLoop()
+        tree.update_passive_counts()
         print('finished')
 
     background(255)
