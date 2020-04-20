@@ -6,11 +6,12 @@ https://medium.com/@jason.webb/space-colonization-algorithm-in-javascript-6f683b
 """
 add_library('svg')
 
-n_leaves = 300
+leaf_prob = 0.01 # ratio of non-white pixels that are converted to leaves
 
-max_dist = 100
-min_dist = 4
-branch_len = 2
+max_dist = 50 # max distance between a leaf and a branch such that the branch is influenced by the leaf 
+min_dist = 4 # min distance between a leaf and a branch such when reached the leaf become 'consumed'
+branch_len = 3
+tree = None
 
 class Leaf:
     def __init__(self, pos):
@@ -62,8 +63,7 @@ class Branch:
     
     def draw(self):
         if self.parent is not None:
-            weight = map(log(1 + self.n_children), 0, 4, 0.4, 2.5)
-            # weight = 1 + log(1 + self.n_children)
+            weight = map(log(1 + self.n_children), 0, 3, 0.5, 1.5)
             strokeWeight(weight)
             line(self.pos.x, self.pos.y, self.parent.pos.x, self.parent.pos.y)
 
@@ -133,6 +133,9 @@ class Tree:
         children_map = {}
         
         for b in self.passive_branches:
+            b.n_childrens = 0
+
+        for b in self.passive_branches:
             parent = b.parent
             while parent is not None:
                 parent.n_children += 1
@@ -140,7 +143,7 @@ class Tree:
                     root = parent
 
                 parent = parent.parent
-        assert len(self.passive_branches) == root.n_children + 1
+        # assert len(self.passive_branches) == root.n_children + 1
 
 
     def draw(self, leaves=False, branches=True):
@@ -160,36 +163,62 @@ class Tree:
                 b.draw()
 
 
-tree = None
+def create_leaves_random():
+    leaves = []
+    for _ in range(n_leaves):
+        leaf = Leaf(PVector(random(width), random(height-100)))
+        leaves.append(leaf)
+    return leaves
+
+
+def create_leaves_from_image():
+    img = loadImage('maple_leaf.png')
+    img.loadPixels()
+
+    leaves = []
+    for y in range(img.height):
+        for x in range(img.width):
+            i = x + y * img.width
+            if red(img.pixels[i]) < 255:
+                if random(1) < leaf_prob:
+                    xl = map(x, 0, img.width, 0, width)
+                    yl = map(y, 0, img.height, 0, height)
+                    leaves.append(Leaf(PVector(xl, yl)))
+    return leaves
+
 
 def setup():
     global tree
     size(500, 500)
     background(255)
-    
+
     randomSeed(43)
     
-    leaves = []
-    for _ in range(n_leaves):
-        leaf = Leaf(PVector(random(width), random(height-100)))
-        leaves.append(leaf)
+    leaves = create_leaves_from_image()
     
     root = Branch(parent=None,
                   pos=PVector(width/2, height),
                   dir=PVector(0, -1))
     tree = Tree(root, leaves)
-    
-    # noLoop()
+
     
 def draw():
     if len(tree.active_branches) == 0:
         noLoop()
-        tree.update_passive_counts()
+        # tree.update_passive_counts()
+        beginRecord(SVG, "maple_leaf.svg")
+        tree.draw(leaves=True, branches=True)
+        endRecord()
         print('finished')
+        return
 
     background(255)
     tree.grow()
+    tree.update_passive_counts()
     tree.draw(leaves=True, branches=True)
+
+    # enable to save frames to generate gif
+    # saveFrame("frame-######.png")
     
 def keyPressed():
     if key == 'p':
